@@ -1,0 +1,19 @@
+# Dependencias
+node_modules/
+package-lock.json
+yarn.lock
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Sistema operativo
+.DS_Store
+Thumbs.db
+
+# Junie (sesiones y configuración interna)
+.junie/sessions/
+.junie/plans/
