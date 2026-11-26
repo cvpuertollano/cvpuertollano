@@ -74,36 +74,44 @@
                 <button class="tab-button" type="button" data-panel="enrollmentsPanel">Asignaciones</button>
                 <button class="tab-button" type="button" data-panel="feesPanel">Cuotas</button>
                 <button class="tab-button" type="button" data-panel="paymentsPanel">Pagos</button>
+                <button class="tab-button" type="button" data-panel="workbookImportPanel">Importación</button>
             </nav>
 
             <section id="playersPanel" class="workspace">
-                <div class="section-heading"><div><h2>Jugadores</h2><p>Las bajas son lógicas y conservan el historial.</p></div></div>
+                <div class="section-heading"><div><h2>Jugadores</h2><p>Las bajas son lógicas y conservan el historial. Los datos personales completos solo son accesibles para administración.</p></div></div>
                 <form id="playerForm" class="editor-card">
                     <input id="playerId" name="id" type="hidden">
                     <h3 id="playerFormTitle">Añadir jugador</h3>
                     <div class="form-grid">
                         <div><label for="playerFirstName">Nombre</label><input id="playerFirstName" name="first_name" maxlength="100" required></div>
                         <div><label for="playerLastName">Apellidos</label><input id="playerLastName" name="last_name" maxlength="150" required></div>
+                        <div><label for="playerDateOfBirth">Fecha de nacimiento</label><input id="playerDateOfBirth" name="date_of_birth" type="date"></div>
+                        <div><label for="playerIdentityDocument">DNI/NIE/Pasaporte</label><input id="playerIdentityDocument" name="identity_document" maxlength="40" autocomplete="off"></div>
+                        <div class="wide"><label for="playerAddress">Dirección</label><input id="playerAddress" name="address" maxlength="300" autocomplete="street-address"></div>
+                        <div><label for="playerPhone">Teléfono</label><input id="playerPhone" name="phone" type="tel" maxlength="40" autocomplete="tel"></div>
+                        <div><label for="playerEmail">Correo electrónico</label><input id="playerEmail" name="email" type="email" maxlength="254" autocomplete="email"></div>
+                        <div><label for="playerNationality">Nacionalidad</label><input id="playerNationality" name="nationality" maxlength="80"></div>
                         <div class="wide"><label for="playerGuardians">Tutores vinculados</label><select id="playerGuardians" name="guardian_ids" multiple size="4"></select><small>Usa Ctrl (Windows) o Cmd (Mac) para seleccionar varios.</small></div>
                     </div>
                     <div class="form-actions"><button class="button button-primary" type="submit">Guardar jugador</button><button id="cancelPlayerEdit" class="button button-quiet" type="button" hidden>Cancelar edición</button><span id="playerMessage" class="form-message" role="status"></span></div>
                 </form>
-                <div class="table-card"><div class="table-scroll"><table><thead><tr><th>Jugador</th><th>Tutores</th><th>Estado</th><th>Acciones</th></tr></thead><tbody id="playersTable"></tbody></table></div></div>
+                <div class="table-card"><div class="table-scroll"><table><thead><tr><th>Jugador</th><th>Nacimiento</th><th>DNI/NIE/Pasaporte</th><th>Dirección</th><th>Teléfono</th><th>Correo</th><th>Nacionalidad</th><th>Tutores</th><th>Estado</th><th>Acciones</th></tr></thead><tbody id="playersTable"></tbody></table></div></div>
             </section>
 
             <section id="guardiansPanel" class="workspace" hidden>
-                <div class="section-heading"><div><h2>Tutores y cuentas familiares</h2><p>Invita las cuentas desde Supabase Auth antes de vincularlas aquí.</p></div></div>
+                <div class="section-heading"><div><h2>Tutores y cuentas familiares</h2><p>La cuenta es opcional; invita las cuentas desde Supabase Auth antes de vincularlas. El documento solo es accesible para administración.</p></div></div>
                 <form id="guardianForm" class="editor-card">
                     <input id="guardianId" name="id" type="hidden">
                     <h3 id="guardianFormTitle">Añadir tutor</h3>
                     <div class="form-grid">
-                        <div class="wide"><label for="guardianUserId">Cuenta familiar</label><select id="guardianUserId" name="user_id" required></select><small>Se muestran los UUID de las cuentas con rol familiar aún no vinculadas.</small></div>
+                        <div class="wide"><label for="guardianUserId">Cuenta familiar (opcional)</label><select id="guardianUserId" name="user_id"></select><small>Se muestran las cuentas con rol familiar aún no vinculadas; puedes guardar una ficha sin crear un acceso.</small></div>
                         <div><label for="guardianName">Nombre completo</label><input id="guardianName" name="full_name" maxlength="160" required></div>
                         <div><label for="guardianPhone">Teléfono (opcional)</label><input id="guardianPhone" name="phone" type="tel" maxlength="40"></div>
+                        <div><label for="guardianIdentityDocument">DNI/NIE/Pasaporte</label><input id="guardianIdentityDocument" name="identity_document" maxlength="40" autocomplete="off"></div>
                     </div>
                     <div class="form-actions"><button class="button button-primary" type="submit">Guardar tutor</button><button id="cancelGuardianEdit" class="button button-quiet" type="button" hidden>Cancelar edición</button><span id="guardianMessage" class="form-message" role="status"></span></div>
                 </form>
-                <div class="table-card"><div class="table-scroll"><table><thead><tr><th>Tutor</th><th>Cuenta</th><th>Teléfono</th><th>Estado</th><th>Acciones</th></tr></thead><tbody id="guardiansTable"></tbody></table></div></div>
+                <div class="table-card"><div class="table-scroll"><table><thead><tr><th>Tutor</th><th>Cuenta</th><th>Teléfono</th><th>DNI/NIE/Pasaporte</th><th>Estado</th><th>Acciones</th></tr></thead><tbody id="guardiansTable"></tbody></table></div></div>
             </section>
 
             <section id="teamsPanel" class="workspace" hidden>
@@ -135,14 +143,17 @@
             <section id="enrollmentsPanel" class="workspace" hidden>
                 <div class="section-heading"><div><h2>Asignaciones</h2><p>Vincula jugadores con un equipo y temporada.</p></div></div>
                 <form id="enrollmentForm" class="editor-card">
+                    <input id="enrollmentId" name="id" type="hidden">
+                    <h3 id="enrollmentFormTitle">Añadir asignación</h3>
                     <div class="form-grid">
                         <div><label for="enrollmentPlayer">Jugador</label><select id="enrollmentPlayer" name="player_id" required></select></div>
                         <div><label for="enrollmentTeam">Equipo</label><select id="enrollmentTeam" name="team_id" required></select></div>
                         <div><label for="enrollmentSeason">Temporada</label><select id="enrollmentSeason" name="season_id" required></select></div>
+                        <div><label for="enrollmentJerseyNumber">Dorsal</label><input id="enrollmentJerseyNumber" name="jersey_number" maxlength="20" inputmode="numeric"></div>
                     </div>
-                    <div class="form-actions"><button class="button button-primary" type="submit">Crear asignación</button><span id="enrollmentMessage" class="form-message" role="status"></span></div>
+                    <div class="form-actions"><button class="button button-primary" type="submit">Guardar asignación</button><button id="cancelEnrollmentEdit" class="button button-quiet" type="button" hidden>Cancelar edición</button><span id="enrollmentMessage" class="form-message" role="status"></span></div>
                 </form>
-                <div class="table-card"><div class="table-scroll"><table><thead><tr><th>Jugador</th><th>Equipo</th><th>Temporada</th><th>Estado</th><th>Acciones</th></tr></thead><tbody id="enrollmentsTable"></tbody></table></div></div>
+                <div class="table-card"><div class="table-scroll"><table><thead><tr><th>Jugador</th><th>Equipo</th><th>Temporada</th><th>Dorsal</th><th>Estado</th><th>Acciones</th></tr></thead><tbody id="enrollmentsTable"></tbody></table></div></div>
             </section>
 
             <section id="feesPanel" class="workspace" hidden>
@@ -176,7 +187,34 @@
                 </form>
                 <div class="table-card"><div class="table-scroll"><table><thead><tr><th>Fecha</th><th>Jugador</th><th>Concepto</th><th>Importe</th><th>Método</th><th>Referencia</th></tr></thead><tbody id="paymentsTable"></tbody></table></div></div>
             </section>
-        </section>
+
+            <section id="workbookImportPanel" class="workspace" hidden>
+                <div class="section-heading"><div><h2>Importar Excel</h2><p>Prepara jugadores, tutores, asignaciones, cuotas y pagos con una vista previa antes de guardar.</p></div></div>
+                <form id="workbookImportForm" class="editor-card">
+                    <div class="form-grid">
+                        <div><label for="rosterWorkbook">Libro de datos de jugadores</label><input id="rosterWorkbook" name="roster" type="file" accept=".xlsx,.xls" required><small>El archivo se procesa en este navegador; no se envía hasta confirmar la importación.</small></div>
+                        <div><label for="paymentsWorkbook">Libro de pagos</label><input id="paymentsWorkbook" name="payments" type="file" accept=".xlsx,.xls" required><small>Fechas: día de la celda, mes del encabezado y año 2026.</small></div>
+                    </div>
+                    <div class="import-policy"><strong>Reglas de esta carga</strong><span>Temporada 2026-2027 · cuota 150 € · 1 pago: 150 € · 2 pagos: 75 € · 3 pagos: 50 € · método: transferencia.</span></div>
+                    <div class="form-actions"><button id="prepareWorkbookImport" class="button button-primary" type="submit">Preparar vista previa</button><span id="workbookImportMessage" class="form-message" role="status" aria-live="polite"></span></div>
+                </form>
+
+                <div id="workbookImportPreview" class="import-preview" hidden>
+                    <div class="editor-card">
+                        <h3>Revisión previa</h3>
+                        <p id="workbookImportSummary" class="muted"></p>
+                        <ul id="workbookImportIssues" class="import-issues"></ul>
+                    </div>
+                    <div class="table-card">
+                        <div class="table-scroll"><table><thead><tr><th>Hoja / fila</th><th>Nombre en pagos</th><th>Equipo</th><th>Modalidad y fechas</th><th>Asignar jugador</th></tr></thead><tbody id="workbookImportMappings"></tbody></table></div>
+                    </div>
+                    <details class="import-details">
+                        <summary>Revisar todas las fichas y los datos personales que se importarían</summary>
+                        <div class="table-card"><div class="table-scroll"><table><thead><tr><th>Jugador</th><th>Equipo</th><th>Dorsal</th><th>Nacimiento</th><th>Documento</th><th>Dirección</th><th>Teléfono</th><th>Correo</th><th>Nacionalidad</th><th>Tutor</th><th>Teléfono tutor</th><th>Documento tutor</th></tr></thead><tbody id="workbookImportRoster"></tbody></table></div></div>
+                    </details>
+                    <div class="form-actions import-actions"><button id="confirmWorkbookImport" class="button button-primary" type="button" disabled>Confirmar e importar</button><button id="cancelWorkbookImport" class="button button-quiet" type="button">Descartar vista previa</button></div>
+                </div>
+            </section>
     </main>
     <footer class="footer"><p>Club Voleibol Puertollano · Área privada</p></footer>
 </body>

@@ -390,6 +390,81 @@ select[multiple] {
     overflow-x: auto;
 }
 
+.import-preview {
+    display: grid;
+    gap: 16px;
+}
+
+.import-policy {
+    display: grid;
+    gap: 4px;
+    padding: 12px 14px;
+    border-left: 3px solid var(--red);
+    background: #fafafb;
+    font-size: 13px;
+}
+
+.import-issues {
+    margin: 0;
+    padding-left: 20px;
+    color: var(--danger);
+    font-size: 13px;
+}
+
+.import-issues:empty {
+    display: none;
+}
+
+.import-issues .warning {
+    color: #765400;
+}
+
+.import-details {
+    padding: 14px 18px;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: var(--surface);
+}
+
+.import-details summary {
+    cursor: pointer;
+    font-weight: 700;
+}
+
+.import-details .table-card {
+    margin-top: 14px;
+}
+
+.import-mapping-select, .import-new-name, .import-manual-field {
+    min-width: 190px;
+    width: 100%;
+}
+
+.import-new-fields {
+    display: grid;
+    gap: 7px;
+    min-width: 220px;
+    margin-top: 8px;
+}
+
+.import-new-fields[hidden] {
+    display: none;
+}
+
+.import-new-fields label {
+    color: var(--muted);
+    font-size: 11px;
+}
+
+.import-actions {
+    padding: 4px 0 10px;
+}
+
+.import-actions .button-primary:disabled {
+    cursor: not-allowed;
+    opacity: 0.55;
+}
+
 table {
     width: 100%;
     border-collapse: collapse;

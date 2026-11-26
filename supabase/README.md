@@ -1,11 +1,11 @@
 # Configuración del backend del CRM
 
-La web seguirá siendo estática. Supabase aloja la autenticación y PostgreSQL; las políticas de seguridad a nivel de fila (RLS) de la migración `migrations/20261126124000_crm_initial_schema.sql` son las que protegen los datos, incluso cuando se accede a la API directamente.
+La web seguirá siendo estática. Supabase aloja la autenticación y PostgreSQL; las políticas de seguridad a nivel de fila (RLS) de las migraciones protegen los datos, incluso cuando se accede a la API directamente.
 
 ## Preparar el proyecto
 
 1. Crea un proyecto Supabase dedicado al CRM y elige su región después de revisar los requisitos de privacidad y almacenamiento del club. No cargues datos reales de menores hasta completar esa revisión.
-2. Abre **SQL Editor** en el panel del proyecto y ejecuta el contenido de la migración. La migración crea las tablas, activa RLS, limita los permisos de la API a usuarios autenticados y configura el perfil predeterminado como familiar.
+2. Abre **SQL Editor** en el panel del proyecto y ejecuta, en este orden, `migrations/20261126124000_crm_initial_schema.sql`, `migrations/20261126163100_add_player_private_data.sql` y `migrations/20261126170000_add_crm_workbook_import.sql`. Si las dos primeras ya se aplicaron, ejecuta únicamente la tercera migración para habilitar la importación transaccional. No vuelvas a ejecutar migraciones ya aplicadas.
 3. En **Authentication → Settings**, desactiva los registros públicos y los inicios de sesión anónimos. Mantén activada la confirmación de correo y crea las cuentas mediante invitaciones desde **Authentication → Users**. Configura la URL del sitio y las URL de redirección permitidas cuando se conozca la URL final de GitHub Pages.
 4. Invita la primera cuenta del club. El trigger crea su perfil con rol `family`; desde **SQL Editor**, cambia el rol usando el UUID de esa cuenta mostrado en el panel:
 
@@ -27,20 +27,24 @@ La web seguirá siendo estática. Supabase aloja la autenticación y PostgreSQL;
 ## Modelo y permisos
 
 - `guardians` vincula una cuenta de Auth con sus datos de contacto; `player_guardians` relaciona tutores y jugadores, permitiendo varios tutores por jugador.
+- `player_private_data` guarda nacimiento, documento, domicilio, teléfono, correo y nacionalidad del jugador; `guardian_private_data` guarda el documento del tutor. Ambas tablas son solo para administración mediante RLS y no conceden lectura a cuentas familiares. El dorsal se conserva en `player_enrollments` por equipo y temporada.
 - `players`, `teams`, `seasons` y `player_enrollments` modelan la plantilla. Los campos `archived_at` permiten bajas lógicas sin borrar el historial.
 - `fees` registra cuotas en céntimos de euro; `payments` guarda importes parciales o completos, fecha, método y referencia opcional. `fee_balances` calcula lo pagado y el saldo pendiente.
+- La pestaña **Importación** procesa los libros localmente en el navegador y solo transmite los datos tras la confirmación administrativa. La función `public.import_crm_workbook` aplica fichas, tutores sin cuenta de acceso, asignaciones, cuotas y pagos en una sola transacción; si una validación falla, se revierte todo. Las claves de origen únicas de los movimientos hacen idempotente la repetición del mismo libro. Los valores privados no vacíos que ya existan se conservan; el preview advierte si difieren de los del libro.
+- Las pruebas locales del lector y del plan de carga se ejecutan con `node --test .\crm-import.test.mjs`; no sustituyen la validación de la migración en Supabase.
 - Las familias solo pueden leer tutores, jugadores, asignaciones, cuotas, pagos, equipos y temporadas vinculados a su propia cuenta. No pueden escribir datos ni cambiar su rol.
 - Las funciones auxiliares de RLS están en el esquema `private`, que debe permanecer fuera de los esquemas expuestos por la API de Supabase; archivar un tutor revoca su acceso familiar.
 - El personal con rol `admin` puede gestionar los datos por la API autenticada. El rol solo se asigna desde el panel SQL de confianza, no desde el cliente.
+- Las fichas de tutores pueden existir sin una cuenta Auth; solo una cuenta vinculada puede acceder al portal familiar. No se debe conceder a familias acceso a las tablas privadas ni añadir sus campos a consultas familiares.
 - Los pagos no permiten borrado desde la API para conservar el historial; se pueden corregir mediante actualización administrativa. No se deben guardar números de tarjeta, cuentas bancarias, credenciales ni datos financieros sensibles en `reference`.
 
 ## Comprobar el aislamiento antes de producción
 
 Usa datos ficticios y dos cuentas familiares distintas para verificar el acceso después de aplicar la migración:
 
-1. Invita las dos cuentas desde **Authentication → Users** y crea para cada una su fila `guardians`, un jugador diferente, una cuota y al menos un pago.
+1. Invita las dos cuentas desde **Authentication → Users** y crea para cada una su fila `guardians`, un jugador diferente, datos privados ficticios, una cuota y al menos un pago.
 2. Inicia sesión con cada cuenta en `crm.html`. Cada una debe ver solo sus propios jugadores y movimientos; la segunda no debe encontrar registros de la primera.
-3. Repite la comprobación consultando directamente la API autenticada para `players`, `fees`, `fee_balances` y `payments`. Comprueba también que una petición sin sesión no devuelve esos datos y que una familia no puede insertar ni modificar registros.
+3. Repite la comprobación consultando directamente la API autenticada para `players`, `player_private_data`, `guardian_private_data`, `fees`, `fee_balances` y `payments`. Comprueba que las cuentas familiares no pueden leer las dos tablas privadas ni insertar o modificar registros, y que una petición sin sesión no devuelve datos.
 4. Archiva el tutor de prueba y confirma que esa cuenta deja de ver jugadores, cuotas y pagos. No uses datos reales de menores para estas pruebas.
 
 ## Claves y puesta en producción

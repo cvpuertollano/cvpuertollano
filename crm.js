@@ -1,4 +1,13 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import {
+    IMPORT_SEASON,
+    SEASON_FEE_CENTS,
+    buildWorkbookImportPlan as createWorkbookImportPlan,
+    normalizeImportText,
+    parsePaymentsWorkbook,
+    parseRosterWorkbook,
+    paymentCandidates
+} from './crm-import.mjs';
 
 const SUPABASE_URL = 'https://tpqpugpqzuelwmqgzrpp.supabase.co';
 const SUPABASE_PUBLIC_KEY = 'sb_publishable_nVk9_qcPpWn4im1MLKWuZw_cf7klUZy';
@@ -22,7 +31,9 @@ const elements = {
 
 const state = {
     players: [],
+    playerPrivateData: [],
     guardians: [],
+    guardianPrivateData: [],
     playerGuardians: [],
     profiles: [],
     teams: [],
@@ -34,6 +45,8 @@ const state = {
 };
 
 let supabase;
+let workbookImportDraft = null;
+let spreadsheetLibraryPromise = null;
 
 function setMessage(element, message, kind = '') {
     element.textContent = message;
@@ -157,11 +170,18 @@ function nameForSeason(id) {
 
 function renderPlayers() {
     const body = document.getElementById('playersTable');
-    if (!state.players.length) return setEmptyRow(body, 4);
+    if (!state.players.length) return setEmptyRow(body, 10);
     body.replaceChildren();
     state.players.forEach(player => {
         const row = document.createElement('tr');
+        const privateData = state.playerPrivateData.find(item => item.player_id === player.id) || {};
         tableCell(row, `${player.first_name} ${player.last_name}`);
+        tableCell(row, formatDate(privateData.date_of_birth));
+        tableCell(row, privateData.identity_document);
+        tableCell(row, privateData.address);
+        tableCell(row, privateData.phone);
+        tableCell(row, privateData.email);
+        tableCell(row, privateData.nationality);
         const linkedGuardianIds = state.playerGuardians.filter(link => link.player_id === player.id).map(link => link.guardian_id);
         const guardianNames = state.guardians.filter(guardian => linkedGuardianIds.includes(guardian.id)).map(guardian => guardian.full_name);
         tableCell(row, guardianNames.join(', '));
@@ -176,13 +196,15 @@ function renderPlayers() {
 
 function renderGuardians() {
     const body = document.getElementById('guardiansTable');
-    if (!state.guardians.length) return setEmptyRow(body, 5);
+    if (!state.guardians.length) return setEmptyRow(body, 6);
     body.replaceChildren();
     state.guardians.forEach(guardian => {
         const row = document.createElement('tr');
+        const privateData = state.guardianPrivateData.find(item => item.guardian_id === guardian.id) || {};
         tableCell(row, guardian.full_name);
-        tableCell(row, guardian.user_id);
+        tableCell(row, guardian.user_id || 'Sin cuenta CRM');
         tableCell(row, guardian.phone);
+        tableCell(row, privateData.identity_document);
         addStatusCell(row, guardian.archived_at);
         addActionCell(row, [
             { label: 'Editar', onClick: () => editGuardian(guardian) },
@@ -221,19 +243,19 @@ function renderSeasons() {
 
 function renderEnrollments() {
     const body = document.getElementById('enrollmentsTable');
-    if (!state.enrollments.length) return setEmptyRow(body, 5);
+    if (!state.enrollments.length) return setEmptyRow(body, 6);
     body.replaceChildren();
     state.enrollments.forEach(enrollment => {
         const row = document.createElement('tr');
         tableCell(row, nameForPlayer(enrollment.player_id));
         tableCell(row, nameForTeam(enrollment.team_id));
         tableCell(row, nameForSeason(enrollment.season_id));
+        tableCell(row, enrollment.jersey_number);
         addStatusCell(row, enrollment.archived_at);
-        addActionCell(row, [{
-            label: enrollment.archived_at ? 'Reactivar' : 'Archivar',
-            danger: !enrollment.archived_at,
-            onClick: () => toggleArchive('player_enrollments', enrollment.id, enrollment.archived_at)
-        }]);
+        addActionCell(row, [
+            { label: 'Editar', onClick: () => editEnrollment(enrollment) },
+            { label: enrollment.archived_at ? 'Reactivar' : 'Archivar', danger: !enrollment.archived_at, onClick: () => toggleArchive('player_enrollments', enrollment.id, enrollment.archived_at) }
+        ]);
         body.append(row);
     });
 }
@@ -292,7 +314,7 @@ function updateSelects() {
     const currentGuardianId = document.getElementById('guardianId').value;
     const usedUserIds = new Set(state.guardians.filter(guardian => guardian.id !== currentGuardianId).map(guardian => guardian.user_id));
     const availableProfiles = state.profiles.filter(profile => !usedUserIds.has(profile.id));
-    fillSelect('guardianUserId', availableProfiles, profile => profile.id);
+    fillSelect('guardianUserId', availableProfiles, profile => profile.id, 'Sin cuenta CRM');
 
     const feeOptions = state.balances.filter(balance => balance.outstanding_cents > 0 && !balance.archived_at);
     fillSelect('paymentFee', feeOptions, balance => `${nameForPlayer(balance.player_id)} · ${balance.description} · pendiente ${formatMoney(balance.outstanding_cents)}`);
@@ -300,9 +322,11 @@ function updateSelects() {
 }
 
 async function loadAdminData() {
-    const [players, guardians, playerGuardians, profiles, teams, seasons, enrollments, fees, balances, payments] = await Promise.all([
+    const [players, playerPrivateData, guardians, guardianPrivateData, playerGuardians, profiles, teams, seasons, enrollments, fees, balances, payments] = await Promise.all([
         fetchRows('players', 'last_name'),
+        fetchRows('player_private_data'),
         fetchRows('guardians', 'full_name'),
+        fetchRows('guardian_private_data'),
         fetchRows('player_guardians', 'created_at'),
         supabase.from('profiles').select('id, role').eq('role', 'family').then(({ data, error }) => {
             if (error) throw error;
@@ -321,7 +345,7 @@ async function loadAdminData() {
             return data || [];
         })
     ]);
-    Object.assign(state, { players, guardians, playerGuardians, profiles, teams, seasons, enrollments, fees, balances, payments });
+    Object.assign(state, { players, playerPrivateData, guardians, guardianPrivateData, playerGuardians, profiles, teams, seasons, enrollments, fees, balances, payments });
     updateSelects();
     renderPlayers();
     renderGuardians();
@@ -343,9 +367,16 @@ function clearEditForm(formId, titleId, defaultTitle, cancelId) {
 }
 
 function editPlayer(player) {
+    const privateData = state.playerPrivateData.find(item => item.player_id === player.id) || {};
     document.getElementById('playerId').value = player.id;
     document.getElementById('playerFirstName').value = player.first_name;
     document.getElementById('playerLastName').value = player.last_name;
+    document.getElementById('playerDateOfBirth').value = privateData.date_of_birth || '';
+    document.getElementById('playerIdentityDocument').value = privateData.identity_document || '';
+    document.getElementById('playerAddress').value = privateData.address || '';
+    document.getElementById('playerPhone').value = privateData.phone || '';
+    document.getElementById('playerEmail').value = privateData.email || '';
+    document.getElementById('playerNationality').value = privateData.nationality || '';
     const guardianIds = state.playerGuardians.filter(link => link.player_id === player.id).map(link => link.guardian_id);
     Array.from(document.getElementById('playerGuardians').options).forEach(option => { option.selected = guardianIds.includes(option.value); });
     document.getElementById('playerFormTitle').textContent = 'Editar jugador';
@@ -354,15 +385,32 @@ function editPlayer(player) {
 }
 
 function editGuardian(guardian) {
+    const privateData = state.guardianPrivateData.find(item => item.guardian_id === guardian.id) || {};
     document.getElementById('guardianId').value = guardian.id;
     updateSelects();
     document.getElementById('guardianUserId').value = guardian.user_id;
     document.getElementById('guardianUserId').disabled = true;
     document.getElementById('guardianName').value = guardian.full_name;
     document.getElementById('guardianPhone').value = guardian.phone || '';
+    document.getElementById('guardianIdentityDocument').value = privateData.identity_document || '';
     document.getElementById('guardianFormTitle').textContent = 'Editar tutor';
     document.getElementById('cancelGuardianEdit').hidden = false;
     document.getElementById('guardiansPanel').scrollIntoView({ behavior: 'smooth' });
+}
+
+function editEnrollment(enrollment) {
+    document.getElementById('enrollmentId').value = enrollment.id;
+    updateSelects();
+    ensureSelectOption('enrollmentPlayer', enrollment.player_id, nameForPlayer(enrollment.player_id));
+    ensureSelectOption('enrollmentTeam', enrollment.team_id, nameForTeam(enrollment.team_id));
+    ensureSelectOption('enrollmentSeason', enrollment.season_id, nameForSeason(enrollment.season_id));
+    document.getElementById('enrollmentPlayer').value = enrollment.player_id;
+    document.getElementById('enrollmentTeam').value = enrollment.team_id;
+    document.getElementById('enrollmentSeason').value = enrollment.season_id;
+    document.getElementById('enrollmentJerseyNumber').value = enrollment.jersey_number || '';
+    document.getElementById('enrollmentFormTitle').textContent = 'Editar asignación';
+    document.getElementById('cancelEnrollmentEdit').hidden = false;
+    document.getElementById('enrollmentsPanel').scrollIntoView({ behavior: 'smooth' });
 }
 
 function editNamedRecord(table, item) {
@@ -446,6 +494,7 @@ function registerAdminForms() {
     registerForm('playerForm', 'playerMessage', async data => {
         const playerId = data.get('id');
         const payload = { first_name: data.get('first_name').trim(), last_name: data.get('last_name').trim() };
+        const nullableValue = name => data.get(name).trim() || null;
         let savedId = playerId;
         if (playerId) {
             const { error } = await supabase.from('players').update(payload).eq('id', playerId);
@@ -458,6 +507,17 @@ function registerAdminForms() {
             document.getElementById('playerFormTitle').textContent = 'Completar jugador';
             document.getElementById('cancelPlayerEdit').hidden = false;
         }
+        const privatePayload = {
+            player_id: savedId,
+            date_of_birth: nullableValue('date_of_birth'),
+            identity_document: nullableValue('identity_document'),
+            address: nullableValue('address'),
+            phone: nullableValue('phone'),
+            email: nullableValue('email'),
+            nationality: nullableValue('nationality')
+        };
+        const { error: privateDataError } = await supabase.from('player_private_data').upsert(privatePayload, { onConflict: 'player_id' });
+        if (privateDataError) throw privateDataError;
         await syncPlayerGuardians(savedId, data.getAll('guardian_ids'));
         clearEditForm('playerForm', 'playerFormTitle', 'Añadir jugador', 'cancelPlayerEdit');
     }, 'Jugador guardado.');
@@ -465,13 +525,20 @@ function registerAdminForms() {
     registerForm('guardianForm', 'guardianMessage', async data => {
         const id = data.get('id');
         const payload = { full_name: data.get('full_name').trim(), phone: data.get('phone').trim() || null };
+        let savedId = id;
         if (id) {
             const { error } = await supabase.from('guardians').update(payload).eq('id', id);
             if (error) throw error;
         } else {
-            const { error } = await supabase.from('guardians').insert({ ...payload, user_id: data.get('user_id') });
+            const { data: saved, error } = await supabase.from('guardians').insert({ ...payload, user_id: data.get('user_id') || null }).select('id').single();
             if (error) throw error;
+            savedId = saved.id;
         }
+        const { error: privateDataError } = await supabase.from('guardian_private_data').upsert({
+            guardian_id: savedId,
+            identity_document: data.get('identity_document').trim() || null
+        }, { onConflict: 'guardian_id' });
+        if (privateDataError) throw privateDataError;
         clearEditForm('guardianForm', 'guardianFormTitle', 'Añadir tutor', 'cancelGuardianEdit');
         document.getElementById('guardianUserId').disabled = false;
     }, 'Tutor guardado.');
@@ -501,13 +568,19 @@ function registerAdminForms() {
     }, 'Temporada guardada.');
 
     registerForm('enrollmentForm', 'enrollmentMessage', async data => {
-        const { error } = await supabase.from('player_enrollments').insert({
+        const id = data.get('id');
+        const payload = {
             player_id: data.get('player_id'),
             team_id: data.get('team_id'),
-            season_id: data.get('season_id')
-        });
+            season_id: data.get('season_id'),
+            jersey_number: data.get('jersey_number').trim() || null
+        };
+        const result = id
+            ? await supabase.from('player_enrollments').update(payload).eq('id', id)
+            : await supabase.from('player_enrollments').insert(payload);
+        const { error } = result;
         if (error) throw error;
-        document.getElementById('enrollmentForm').reset();
+        clearEditForm('enrollmentForm', 'enrollmentFormTitle', 'Añadir asignación', 'cancelEnrollmentEdit');
     }, 'Asignación creada.');
 
     registerForm('feeForm', 'feeMessage', async data => {
@@ -567,6 +640,339 @@ function updatePaymentBalance() {
     const feeId = document.getElementById('paymentFee').value;
     const balance = state.balances.find(item => item.fee_id === feeId);
     document.getElementById('paymentBalance').textContent = balance ? `Saldo pendiente: ${formatMoney(balance.outstanding_cents)}` : '';
+}
+
+const MAX_WORKBOOK_BYTES = 15 * 1024 * 1024;
+
+function loadSpreadsheetLibrary() {
+    if (window.XLSX?.read) return Promise.resolve(window.XLSX);
+    if (spreadsheetLibraryPromise) return spreadsheetLibraryPromise;
+    spreadsheetLibraryPromise = new Promise((resolve, reject) => {
+        const script = document.createElement('script');
+        script.src = 'https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js';
+        script.onload = () => window.XLSX?.read
+            ? resolve(window.XLSX)
+            : reject(new Error('No se pudo inicializar el lector de Excel.'));
+        script.onerror = () => reject(new Error('No se pudo cargar el lector de Excel; comprueba la conexión e inténtalo otra vez.'));
+        document.head.append(script);
+    });
+    return spreadsheetLibraryPromise;
+}
+
+async function readWorkbookFile(file, XLSX) {
+    if (!/\.(xlsx|xls)$/i.test(file.name)) throw new Error(`“${file.name}” no parece un archivo Excel compatible.`);
+    if (!file.size || file.size > MAX_WORKBOOK_BYTES) throw new Error('Cada libro debe ocupar entre 1 byte y 15 MB.');
+    if (!window.crypto?.subtle) throw new Error('La importación requiere una conexión segura HTTPS para generar claves de idempotencia.');
+    const bytes = await file.arrayBuffer();
+    const workbook = XLSX.read(bytes, { type: 'array', cellDates: false });
+    const digest = await window.crypto.subtle.digest('SHA-256', bytes);
+    const hash = Array.from(new Uint8Array(digest), value => value.toString(16).padStart(2, '0')).join('');
+    return { workbook, hash };
+}
+
+function importCandidatesFor(paymentRow) {
+    const staged = workbookImportDraft.rosterRows
+        .filter(player => player.team_name === paymentRow.team_name)
+        .map(player => ({ key: `roster:${player.key}`, full_name: player.full_name, kind: 'roster', player }));
+    const stagedNames = new Set(workbookImportDraft.rosterRows.map(player => normalizeImportText(player.full_name)));
+    const existing = state.players
+        .filter(player => !stagedNames.has(normalizeImportText(`${player.first_name} ${player.last_name}`)))
+        .map(player => ({ key: `existing:${player.id}`, full_name: `${player.first_name} ${player.last_name}`, kind: 'existing', player }));
+    return [...staged, ...existing];
+}
+
+function initializePaymentMappings() {
+    workbookImportDraft.paymentRows.forEach(paymentRow => {
+        const candidates = paymentCandidates(paymentRow.player_name, importCandidatesFor(paymentRow));
+        if (candidates.length === 1) {
+            paymentRow.mapping.selection = candidates[0].key;
+        }
+    });
+}
+
+function setImportMappingFromControl(paymentRow, value) {
+    paymentRow.mapping.selection = value;
+}
+
+function renderWorkbookImportMappings() {
+    const body = document.getElementById('workbookImportMappings');
+    body.replaceChildren();
+    if (!workbookImportDraft?.paymentRows.length) return setEmptyRow(body, 5, 'El libro no contiene filas de pagos reconocibles.');
+
+    workbookImportDraft.paymentRows.forEach(paymentRow => {
+        const row = document.createElement('tr');
+        tableCell(row, `${paymentRow.source.sheet} · fila ${paymentRow.source.row}`);
+        tableCell(row, paymentRow.player_name);
+        tableCell(row, paymentRow.team_name);
+        const paymentLabels = paymentRow.payments.map(payment => payment.paid_at ? formatDate(payment.paid_at) : payment.issue);
+        tableCell(row, `${paymentRow.plan_text || 'Sin modalidad'}${paymentLabels.length ? ` · ${paymentLabels.join(', ')}` : ' · Sin fechas'}`);
+
+        const mappingCell = document.createElement('td');
+        const select = document.createElement('select');
+        select.className = 'import-mapping-select';
+        select.dataset.paymentRow = paymentRow.key;
+        const placeholder = document.createElement('option');
+        placeholder.value = '';
+        placeholder.textContent = 'Selecciona o resuelve el alias…';
+        select.append(placeholder);
+        importCandidatesFor(paymentRow).forEach(candidate => {
+            const option = document.createElement('option');
+            option.value = candidate.key;
+            option.textContent = `${candidate.full_name}${candidate.kind === 'roster' ? ' · libro de jugadores' : ' · ya existe en CRM'}`;
+            select.append(option);
+        });
+        const newOption = document.createElement('option');
+        newOption.value = 'new';
+        newOption.textContent = 'Crear ficha adicional…';
+        select.append(newOption);
+        const skipOption = document.createElement('option');
+        skipOption.value = 'skip';
+        skipOption.textContent = 'Omitir esta fila de pagos';
+        select.append(skipOption);
+        select.value = paymentRow.mapping.selection || '';
+        mappingCell.append(select);
+
+        const manualFields = document.createElement('div');
+        manualFields.className = 'import-new-fields';
+        manualFields.hidden = paymentRow.mapping.selection !== 'new' && paymentRow.payments.length > 0;
+        if (paymentRow.mapping.selection === 'new') {
+            const nameLabel = document.createElement('label');
+            nameLabel.textContent = 'Nombre completo de la ficha nueva';
+            const nameInput = document.createElement('input');
+            nameInput.className = 'import-new-name';
+            nameInput.type = 'text';
+            nameInput.maxLength = 250;
+            nameInput.autocomplete = 'off';
+            nameInput.placeholder = 'Nombre y apellidos';
+            nameInput.value = paymentRow.mapping.newName;
+            nameInput.dataset.importField = 'newName';
+            nameInput.dataset.paymentRow = paymentRow.key;
+            nameLabel.append(nameInput);
+            manualFields.append(nameLabel);
+        }
+        if (!manualFields.hidden) {
+            const amountLabel = document.createElement('label');
+            amountLabel.textContent = 'Pago manual confirmado (opcional, €)';
+            const amountInput = document.createElement('input');
+            amountInput.className = 'import-manual-field';
+            amountInput.type = 'number';
+            amountInput.min = '0.01';
+            amountInput.max = '150';
+            amountInput.step = '0.01';
+            amountInput.inputMode = 'decimal';
+            amountInput.value = paymentRow.mapping.manualAmount;
+            amountInput.dataset.importField = 'manualAmount';
+            amountInput.dataset.paymentRow = paymentRow.key;
+            amountLabel.append(amountInput);
+            manualFields.append(amountLabel);
+
+            const dateLabel = document.createElement('label');
+            dateLabel.textContent = 'Fecha real del pago';
+            const dateInput = document.createElement('input');
+            dateInput.className = 'import-manual-field';
+            dateInput.type = 'date';
+            dateInput.min = '2026-01-01';
+            dateInput.max = '2026-12-31';
+            dateInput.value = paymentRow.mapping.manualDate;
+            dateInput.dataset.importField = 'manualDate';
+            dateInput.dataset.paymentRow = paymentRow.key;
+            dateLabel.append(dateInput);
+            manualFields.append(dateLabel);
+        }
+        mappingCell.append(manualFields);
+        row.append(mappingCell);
+        body.append(row);
+    });
+}
+
+function buildWorkbookImportPlan() {
+    return createWorkbookImportPlan(workbookImportDraft, state);
+}
+
+function renderWorkbookImportRoster(records) {
+    const body = document.getElementById('workbookImportRoster');
+    body.replaceChildren();
+    if (!records.length) return setEmptyRow(body, 12, 'No hay fichas preparadas.');
+    records.forEach(record => {
+        const row = document.createElement('tr');
+        tableCell(row, record.full_name);
+        tableCell(row, record.team_name);
+        tableCell(row, record.jersey_number);
+        tableCell(row, formatDate(record.date_of_birth));
+        tableCell(row, record.identity_document);
+        tableCell(row, record.address);
+        tableCell(row, record.phone);
+        tableCell(row, record.email);
+        tableCell(row, record.nationality);
+        tableCell(row, record.guardian?.full_name);
+        tableCell(row, record.guardian?.phone);
+        tableCell(row, record.guardian?.identity_document);
+        body.append(row);
+    });
+}
+
+function updateWorkbookImportPreview() {
+    if (!workbookImportDraft) return;
+    const plan = buildWorkbookImportPlan();
+    const summary = document.getElementById('workbookImportSummary');
+    summary.textContent = `${plan.records.length} fichas · ${plan.paymentCount} movimientos por ${formatMoney(plan.totalCents)} · temporada ${IMPORT_SEASON}. Se crearán cuotas de 150 € por ficha; las filas sin pagos quedarán con saldo pendiente.`;
+    const issues = document.getElementById('workbookImportIssues');
+    issues.replaceChildren();
+    [...plan.errors, ...plan.warnings].slice(0, 100).forEach((issue, index) => {
+        const item = document.createElement('li');
+        item.textContent = issue;
+        if (index >= plan.errors.length) item.className = 'warning';
+        issues.append(item);
+    });
+    if (plan.errors.length + plan.warnings.length > 100) {
+        const item = document.createElement('li');
+        item.textContent = `Se omiten ${plan.errors.length + plan.warnings.length - 100} avisos adicionales en esta vista.`;
+        item.className = 'warning';
+        issues.append(item);
+    }
+    document.getElementById('confirmWorkbookImport').disabled = Boolean(plan.errors.length || !plan.records.length);
+    renderWorkbookImportRoster(plan.records);
+}
+
+async function prepareWorkbookImport(event) {
+    event.preventDefault();
+    const rosterFile = document.getElementById('rosterWorkbook').files[0];
+    const paymentsFile = document.getElementById('paymentsWorkbook').files[0];
+    if (!rosterFile || !paymentsFile) return;
+    const button = document.getElementById('prepareWorkbookImport');
+    button.disabled = true;
+    setMessage(document.getElementById('workbookImportMessage'), 'Leyendo los archivos localmente…');
+    try {
+        const XLSX = await loadSpreadsheetLibrary();
+        const [rosterSource, paymentSource] = await Promise.all([
+            readWorkbookFile(rosterFile, XLSX),
+            readWorkbookFile(paymentsFile, XLSX)
+        ]);
+        const roster = parseRosterWorkbook(rosterSource.workbook, XLSX);
+        const payments = parsePaymentsWorkbook(paymentSource.workbook, XLSX);
+        workbookImportDraft = {
+            rosterRows: roster.players,
+            paymentRows: payments.rows,
+            paymentHash: paymentSource.hash,
+            errors: [...roster.errors, ...payments.errors]
+        };
+        initializePaymentMappings();
+        document.getElementById('workbookImportPreview').hidden = false;
+        renderWorkbookImportMappings();
+        updateWorkbookImportPreview();
+        setMessage(document.getElementById('workbookImportMessage'), 'Vista previa lista. Los archivos siguen en este navegador.', 'success');
+    } catch (error) {
+        setMessage(document.getElementById('workbookImportMessage'), error.message || 'No se pudieron leer los libros.', 'error');
+    } finally {
+        button.disabled = false;
+    }
+}
+
+function clearWorkbookImportPreview() {
+    workbookImportDraft = null;
+    document.getElementById('workbookImportPreview').hidden = true;
+    document.getElementById('workbookImportMappings').replaceChildren();
+    document.getElementById('workbookImportRoster').replaceChildren();
+    document.getElementById('confirmWorkbookImport').disabled = true;
+}
+
+async function confirmWorkbookImport() {
+    const plan = buildWorkbookImportPlan();
+    if (plan.errors.length || !plan.records.length) {
+        updateWorkbookImportPreview();
+        return;
+    }
+    const confirmation = `Importar ${plan.records.length} fichas, sus cuotas y ${plan.paymentCount} movimientos por ${formatMoney(plan.totalCents)} en la temporada ${IMPORT_SEASON}. ¿Continuar?`;
+    if (!window.confirm(confirmation)) return;
+
+    const button = document.getElementById('confirmWorkbookImport');
+    button.disabled = true;
+    setMessage(document.getElementById('workbookImportMessage'), 'Importando en una transacción…');
+    try {
+        const records = plan.records.map(record => ({
+            first_name: record.first_name,
+            last_name: record.last_name,
+            team_name: record.team_name,
+            existing_player_id: record.existingPlayerId,
+            jersey_number: record.jersey_number || null,
+            player_private_data: {
+                date_of_birth: record.date_of_birth || null,
+                identity_document: record.identity_document || null,
+                address: record.address || null,
+                phone: record.phone || null,
+                email: record.email || null,
+                nationality: record.nationality || null
+            },
+            guardian: record.guardian ? {
+                full_name: record.guardian.full_name,
+                phone: record.guardian.phone || null,
+                identity_document: record.guardian.identity_document || null
+            } : null,
+            fee_amount_cents: SEASON_FEE_CENTS,
+            payments: record.payments
+        }));
+        const { data, error } = await supabase.rpc('import_crm_workbook', {
+            p_season_name: IMPORT_SEASON,
+            p_records: records
+        });
+        if (error) {
+            const message = error.message || 'Supabase rechazó la importación.';
+            if (/import_crm_workbook|schema cache|function .* does not exist/i.test(message)) {
+                throw new Error('Falta aplicar la migración supabase/migrations/20261126170000_add_crm_workbook_import.sql en Supabase. No se guardó ningún dato.');
+            }
+            throw new Error(message);
+        }
+        clearWorkbookImportPreview();
+        document.getElementById('workbookImportForm').reset();
+        const resultMessage = `Carga completada: ${data.players_created} jugadores nuevos, ${data.players_reused} reutilizados, ${data.guardians_created} tutores nuevos y ${data.payments_created} pagos registrados (${data.payments_reused} ya estaban importados).`;
+        setMessage(document.getElementById('workbookImportMessage'), resultMessage, 'success');
+        try {
+            await loadAdminData();
+            setMessage(elements.appMessage, 'Importación confirmada y datos actualizados.', 'success');
+        } catch (refreshError) {
+            setMessage(elements.appMessage, `La importación se completó, pero no se pudo actualizar la vista: ${refreshError.message}`, 'error');
+        }
+    } catch (error) {
+        setMessage(document.getElementById('workbookImportMessage'), error.message || 'No se pudo completar la importación; la transacción se revirtió.', 'error');
+        updateWorkbookImportPreview();
+    } finally {
+        button.disabled = false;
+    }
+}
+
+function setupWorkbookImport() {
+    document.getElementById('workbookImportForm').addEventListener('submit', prepareWorkbookImport);
+    ['rosterWorkbook', 'paymentsWorkbook'].forEach(id => {
+        document.getElementById(id).addEventListener('change', () => {
+            if (!workbookImportDraft) return;
+            clearWorkbookImportPreview();
+            setMessage(document.getElementById('workbookImportMessage'), 'Cambió uno de los archivos. Prepara una nueva vista previa antes de importar.');
+        });
+    });
+    document.getElementById('confirmWorkbookImport').addEventListener('click', confirmWorkbookImport);
+    document.getElementById('cancelWorkbookImport').addEventListener('click', () => {
+        clearWorkbookImportPreview();
+        document.getElementById('workbookImportForm').reset();
+        setMessage(document.getElementById('workbookImportMessage'), 'Vista previa descartada. No se guardó ningún dato.');
+    });
+    const mappings = document.getElementById('workbookImportMappings');
+    mappings.addEventListener('change', event => {
+        if (event.target.matches('[data-payment-row]') && event.target.tagName === 'SELECT') {
+            const paymentRow = workbookImportDraft?.paymentRows.find(item => item.key === event.target.dataset.paymentRow);
+            if (!paymentRow) return;
+            setImportMappingFromControl(paymentRow, event.target.value);
+            renderWorkbookImportMappings();
+            updateWorkbookImportPreview();
+        }
+    });
+    mappings.addEventListener('input', event => {
+        const { paymentRow: rowKey, importField } = event.target.dataset;
+        if (!rowKey || !importField) return;
+        const paymentRow = workbookImportDraft?.paymentRows.find(item => item.key === rowKey);
+        if (!paymentRow) return;
+        paymentRow.mapping[importField] = event.target.value;
+        updateWorkbookImportPreview();
+    });
 }
 
 function appendFamilyText(parent, tag, className, text) {
@@ -697,6 +1103,7 @@ function showDenied(message) {
 
 function clearAdminState() {
     Object.keys(state).forEach(key => { state[key] = []; });
+    clearWorkbookImportPreview();
     document.querySelectorAll('#adminPanel form').forEach(form => form.reset());
     document.querySelectorAll('#adminPanel tbody').forEach(body => body.replaceChildren());
     document.querySelectorAll('#adminPanel select').forEach(select => select.replaceChildren());
@@ -704,6 +1111,7 @@ function clearAdminState() {
     [
         ['playerFormTitle', 'Añadir jugador'],
         ['guardianFormTitle', 'Añadir tutor'],
+        ['enrollmentFormTitle', 'Añadir asignación'],
         ['teamFormTitle', 'Añadir equipo'],
         ['seasonFormTitle', 'Añadir temporada'],
         ['feeFormTitle', 'Añadir cuota']
@@ -761,6 +1169,7 @@ function setupCancelButtons() {
     const mappings = [
         ['cancelPlayerEdit', 'playerForm', 'playerFormTitle', 'Añadir jugador'],
         ['cancelGuardianEdit', 'guardianForm', 'guardianFormTitle', 'Añadir tutor'],
+        ['cancelEnrollmentEdit', 'enrollmentForm', 'enrollmentFormTitle', 'Añadir asignación'],
         ['cancelTeamEdit', 'teamForm', 'teamFormTitle', 'Añadir equipo'],
         ['cancelSeasonEdit', 'seasonForm', 'seasonFormTitle', 'Añadir temporada'],
         ['cancelFeeEdit', 'feeForm', 'feeFormTitle', 'Añadir cuota']
@@ -777,6 +1186,7 @@ async function initialize() {
     setupTabs();
     setupCancelButtons();
     registerAdminForms();
+    setupWorkbookImport();
     document.getElementById('paymentDate').value = localDateValue();
     document.getElementById('paymentFee').addEventListener('change', updatePaymentBalance);
 
