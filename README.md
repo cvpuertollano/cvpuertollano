@@ -7,29 +7,22 @@
 1. Ve a [github.com](https://github.com) y regístrate si no tienes cuenta.
 2. Verifica tu correo electrónico.
 
-### Paso 2: Crear un repositorio en GitHub
+### Paso 2: Repositorio de GitHub
 
-1. Inicia sesión en GitHub.
-2. Haz clic en el botón **"+"** → **"New repository"**.
-3. Nombre del repositorio: `club-voley-puertollano` (o el que prefieras).
-4. Selecciona **"Public"**.
-5. **No** marques "Initialize this repository with a README" (ya tienes tu propio contenido).
-6. Haz clic en **"Create repository"**.
+El repositorio de este proyecto es [`cvpuertollano/cvpuertollano`](https://github.com/cvpuertollano/cvpuertollano). No es necesario crear otro si ya tienes acceso a ese repositorio. La disponibilidad de GitHub Pages depende de la visibilidad del repositorio y del plan de GitHub.
 
 ### Paso 3: Subir tu sitio web a GitHub
 
-En tu computadora, abre una terminal (PowerShell) en la carpeta del proyecto y ejecuta:
+Para conectar por primera vez la carpeta local al repositorio, abre PowerShell en la carpeta del proyecto y ejecuta:
 
 ```powershell
-# Conectar tu repositorio local con GitHub
-git remote add origin https://github.com/TU_USUARIO/club-voley-puertollano.git
+# Conectar la carpeta local con el repositorio del club
+git remote add origin https://github.com/cvpuertollano/cvpuertollano.git
 
 # Subir los archivos
 git branch -M main
 git push -u origin main
 ```
-
-> **Nota:** Reemplaza `TU_USUARIO` con tu nombre de usuario de GitHub.
 
 ### Paso 4: Activar GitHub Pages
 
@@ -40,10 +33,16 @@ git push -u origin main
 5. En **"Branch"**, selecciona `main` y la carpeta `/(root)`.
 6. Haz clic en **"Save"**.
 
-¡Listo! En unos minutos GitHub te dará una URL como:
-`https://TU_USUARIO.github.io/club-voley-puertollano/`
+Si GitHub Pages está disponible para el repositorio, el sitio del club se publicará en:
+`https://cvpuertollano.github.io/cvpuertollano/`
 
 Tu sitio ya estará en línea y accesible para todos. 🎉
+
+## CRM privado para administración y familias
+
+El acceso al CRM está en `crm.html` y la página pública enlaza con él desde la navegación. GitHub Pages sirve estos archivos estáticos; la autenticación y los datos privados se alojan en Supabase, no en GitHub. Consulta [`supabase/README.md`](supabase/README.md) para conocer el esquema, los roles y las comprobaciones de aislamiento.
+
+El cliente ya está conectado al proyecto Supabase mediante `SUPABASE_URL` y la clave pública `SUPABASE_PUBLIC_KEY` de `crm.js`. Si se cambia de proyecto, actualiza ambos valores con el Project URL y la clave `publishable` (o `anon`); nunca incluyas una clave `service_role` ni otra clave secreta. Para publicar, configura en Supabase Auth la URL del sitio `https://cvpuertollano.github.io/cvpuertollano/` y permite `https://cvpuertollano.github.io/cvpuertollano/crm.html` como redirección. GitHub Pages requiere que el repositorio sea público o un plan que permita Pages desde repositorios privados; subir el código no cambia su visibilidad.
 
 ---
 

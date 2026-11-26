@@ -575,7 +575,7 @@
 
         .team-grid {
             display: grid;
-            grid-template-columns: repeat(4, 1fr);
+            grid-template-columns: repeat(3, 1fr);
             gap: 30px;
             max-width: 1200px;
             margin: 0 auto;
@@ -584,10 +584,10 @@
         .team-card {
             background: var(--white);
             border-radius: 20px;
-            overflow: hidden;
             box-shadow: 0 10px 40px rgba(0, 0, 0, 0.08);
             transition: all 0.4s ease;
             position: relative;
+            cursor: pointer;
         }
 
         .team-card:hover {
@@ -595,35 +595,46 @@
             box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
         }
 
-        .team-card-image {
-            height: 280px;
+        .team-card-header {
+            height: 200px;
             background: linear-gradient(135deg, var(--dark) 0%, var(--dark-red) 100%);
             display: flex;
             align-items: center;
             justify-content: center;
             position: relative;
             overflow: hidden;
+            border-radius: 20px 20px 0 0;
         }
 
-        .team-card-image i {
-            font-size: 5rem;
-            color: rgba(255, 255, 255, 0.1);
+        .team-card-header.masculina {
+            background: linear-gradient(135deg, #1a237e 0%, #283593 100%);
         }
 
-        .team-card-number {
+        .team-card-header.femenino {
+            background: linear-gradient(135deg, #880e4f 0%, #ad1457 100%);
+        }
+
+        .team-card-header.junior-masc {
+            background: linear-gradient(135deg, #1b5e20 0%, #2e7d32 100%);
+        }
+
+        .team-card-header i {
+            font-size: 4rem;
+            color: rgba(255, 255, 255, 0.2);
+        }
+
+        .team-card-badge {
             position: absolute;
             top: 15px;
-            right: 15px;
+            left: 15px;
             background: var(--red);
             color: var(--white);
-            width: 40px;
-            height: 40px;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: 900;
-            font-size: 1rem;
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-size: 0.7rem;
+            font-weight: 700;
+            letter-spacing: 1px;
+            text-transform: uppercase;
         }
 
         .team-card-info {
@@ -631,18 +642,99 @@
             text-align: center;
         }
 
-        .team-card-info h4 {
-            font-size: 1.1rem;
+        .team-card-info h3 {
+            font-size: 1.3rem;
             color: var(--black);
-            margin-bottom: 5px;
+            margin-bottom: 8px;
+            font-weight: 700;
         }
 
-        .team-card-info .position {
+        .team-card-info .team-category {
             color: var(--red);
             font-size: 0.8rem;
             font-weight: 600;
             letter-spacing: 2px;
             text-transform: uppercase;
+            margin-bottom: 15px;
+            display: block;
+        }
+
+        .team-card-info .team-players-count {
+            color: #666;
+            font-size: 0.85rem;
+            margin-bottom: 15px;
+        }
+
+        .team-card-toggle {
+            display: inline-block;
+            color: var(--red);
+            font-size: 0.85rem;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+
+        .team-card-toggle i {
+            font-size: 0.8rem;
+            margin-left: 5px;
+            transition: transform 0.3s ease;
+        }
+
+        .team-card.active .team-card-toggle i {
+            transform: rotate(180deg);
+        }
+
+        .team-players-list {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.5s ease;
+            background: #f9f9f9;
+        }
+
+        .team-card.active .team-players-list {
+            max-height: 600px;
+        }
+
+        .team-players-list ul {
+            list-style: none;
+            padding: 15px 25px 25px;
+        }
+
+        .team-players-list li {
+            padding: 10px 0;
+            border-bottom: 1px solid #eee;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.9rem;
+        }
+
+        .team-players-list li:last-child {
+            border-bottom: none;
+        }
+
+        .team-players-list .player-number {
+            background: var(--red);
+            color: var(--white);
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.75rem;
+            font-weight: 700;
+            margin-right: 10px;
+        }
+
+        .team-players-list .player-name {
+            flex: 1;
+            font-weight: 600;
+            color: var(--black);
+        }
+
+        .team-players-list .player-position {
+            color: #888;
+            font-size: 0.8rem;
         }
 
         /* ===== NEWS SECTION ===== */
@@ -1072,9 +1164,10 @@
         <ul class="nav-links" id="navLinks">
             <li><a href="#hero">Inicio</a></li>
             <li><a href="#about">Nosotros</a></li>
-            <li><a href="#team">Equipo</a></li>
+            <li><a href="#team">Equipos</a></li>
             <li><a href="#news">Noticias</a></li>
             <li><a href="#contact">Contacto</a></li>
+            <li><a href="crm.html">Área privada</a></li>
         </ul>
         <div class="hamburger" id="hamburger">
             <span></span>
@@ -1184,94 +1277,101 @@
     <!-- TEAM SECTION -->
     <section class="section team" id="team">
         <div class="section-header">
-            <div class="section-tag">Nuestro Equipo</div>
-            <h2 class="section-title">Conoce a los <span style="color: var(--red);">Jugadores</span></h2>
+            <div class="section-tag">Nuestros Equipos</div>
+            <h2 class="section-title">Conoce a <span style="color: var(--red);">Nuestros Equipos</span></h2>
             <div class="section-line"></div>
             <p class="section-desc">
-                Un grupo de atletas comprometidos con la excelencia y la pasión por el voleibol.
+                Tres equipos, una misma pasión: el voleibol. Haz clic en cada equipo para ver su plantilla.
             </p>
         </div>
         <div class="team-grid">
+
+            <!-- Segunda División Masculina -->
             <div class="team-card reveal">
-                <div class="team-card-image">
-                    <i class="fas fa-user"></i>
-                    <div class="team-card-number">1</div>
+                <div class="team-card-header masculina">
+                    <i class="fas fa-volleyball-ball"></i>
+                    <div class="team-card-badge">Primera Equipo</div>
                 </div>
                 <div class="team-card-info">
-                    <h4>Jugador 1</h4>
-                    <span class="position">Central</span>
+                    <h3>Segunda División Masculina</h3>
+                    <span class="team-category">Equipo Senior</span>
+                    <p class="team-players-count">12 jugadores en plantilla</p>
+                    <span class="team-card-toggle">Ver plantilla <i class="fas fa-chevron-down"></i></span>
+                </div>
+                <div class="team-players-list">
+                    <ul>
+                        <li><span class="player-number">1</span><span class="player-name">Jugador 1</span><span class="player-position">Líbero</span></li>
+                        <li><span class="player-number">2</span><span class="player-name">Jugador 2</span><span class="player-position">Armador</span></li>
+                        <li><span class="player-number">3</span><span class="player-name">Jugador 3</span><span class="player-position">Central</span></li>
+                        <li><span class="player-number">4</span><span class="player-name">Jugador 4</span><span class="player-position">Central</span></li>
+                        <li><span class="player-number">5</span><span class="player-name">Jugador 5</span><span class="player-position">Puntero</span></li>
+                        <li><span class="player-number">6</span><span class="player-name">Jugador 6</span><span class="player-position">Puntero</span></li>
+                        <li><span class="player-number">7</span><span class="player-name">Jugador 7</span><span class="player-position">Opuesto</span></li>
+                        <li><span class="player-number">8</span><span class="player-name">Jugador 8</span><span class="player-position">Armador</span></li>
+                        <li><span class="player-number">9</span><span class="player-name">Jugador 9</span><span class="player-position">Puntero</span></li>
+                        <li><span class="player-number">10</span><span class="player-name">Jugador 10</span><span class="player-position">Líbero</span></li>
+                        <li><span class="player-number">11</span><span class="player-name">Jugador 11</span><span class="player-position">Central</span></li>
+                        <li><span class="player-number">12</span><span class="player-name">Jugador 12</span><span class="player-position">Opuesto</span></li>
+                    </ul>
                 </div>
             </div>
+
+            <!-- Junior Masculino -->
             <div class="team-card reveal">
-                <div class="team-card-image">
-                    <i class="fas fa-user"></i>
-                    <div class="team-card-number">2</div>
+                <div class="team-card-header junior-masc">
+                    <i class="fas fa-volleyball-ball"></i>
+                    <div class="team-card-badge">Base</div>
                 </div>
                 <div class="team-card-info">
-                    <h4>Jugador 2</h4>
-                    <span class="position">Líbero</span>
+                    <h3>Junior Masculino</h3>
+                    <span class="team-category">Categoría Junior</span>
+                    <p class="team-players-count">10 jugadores en plantilla</p>
+                    <span class="team-card-toggle">Ver plantilla <i class="fas fa-chevron-down"></i></span>
+                </div>
+                <div class="team-players-list">
+                    <ul>
+                        <li><span class="player-number">1</span><span class="player-name">Jugador 1</span><span class="player-position">Líbero</span></li>
+                        <li><span class="player-number">2</span><span class="player-name">Jugador 2</span><span class="player-position">Armador</span></li>
+                        <li><span class="player-number">3</span><span class="player-name">Jugador 3</span><span class="player-position">Central</span></li>
+                        <li><span class="player-number">4</span><span class="player-name">Jugador 4</span><span class="player-position">Central</span></li>
+                        <li><span class="player-number">5</span><span class="player-name">Jugador 5</span><span class="player-position">Puntero</span></li>
+                        <li><span class="player-number">6</span><span class="player-name">Jugador 6</span><span class="player-position">Puntero</span></li>
+                        <li><span class="player-number">7</span><span class="player-name">Jugador 7</span><span class="player-position">Opuesto</span></li>
+                        <li><span class="player-number">8</span><span class="player-name">Jugador 8</span><span class="player-position">Armador</span></li>
+                        <li><span class="player-number">9</span><span class="player-name">Jugador 9</span><span class="player-position">Puntero</span></li>
+                        <li><span class="player-number">10</span><span class="player-name">Jugador 10</span><span class="player-position">Líbero</span></li>
+                    </ul>
                 </div>
             </div>
+
+            <!-- Junior Femenino -->
             <div class="team-card reveal">
-                <div class="team-card-image">
-                    <i class="fas fa-user"></i>
-                    <div class="team-card-number">3</div>
+                <div class="team-card-header femenino">
+                    <i class="fas fa-volleyball-ball"></i>
+                    <div class="team-card-badge">Base</div>
                 </div>
                 <div class="team-card-info">
-                    <h4>Jugador 3</h4>
-                    <span class="position">Puntero</span>
+                    <h3>Junior Femenino</h3>
+                    <span class="team-category">Categoría Junior</span>
+                    <p class="team-players-count">10 jugadoras en plantilla</p>
+                    <span class="team-card-toggle">Ver plantilla <i class="fas fa-chevron-down"></i></span>
+                </div>
+                <div class="team-players-list">
+                    <ul>
+                        <li><span class="player-number">1</span><span class="player-name">Jugadora 1</span><span class="player-position">Líbero</span></li>
+                        <li><span class="player-number">2</span><span class="player-name">Jugadora 2</span><span class="player-position">Armador</span></li>
+                        <li><span class="player-number">3</span><span class="player-name">Jugadora 3</span><span class="player-position">Central</span></li>
+                        <li><span class="player-number">4</span><span class="player-name">Jugadora 4</span><span class="player-position">Central</span></li>
+                        <li><span class="player-number">5</span><span class="player-name">Jugadora 5</span><span class="player-position">Puntero</span></li>
+                        <li><span class="player-number">6</span><span class="player-name">Jugadora 6</span><span class="player-position">Puntero</span></li>
+                        <li><span class="player-number">7</span><span class="player-name">Jugadora 7</span><span class="player-position">Opuesto</span></li>
+                        <li><span class="player-number">8</span><span class="player-name">Jugadora 8</span><span class="player-position">Armador</span></li>
+                        <li><span class="player-number">9</span><span class="player-name">Jugadora 9</span><span class="player-position">Puntero</span></li>
+                        <li><span class="player-number">10</span><span class="player-name">Jugadora 10</span><span class="player-position">Líbero</span></li>
+                    </ul>
                 </div>
             </div>
-            <div class="team-card reveal">
-                <div class="team-card-image">
-                    <i class="fas fa-user"></i>
-                    <div class="team-card-number">4</div>
-                </div>
-                <div class="team-card-info">
-                    <h4>Jugador 4</h4>
-                    <span class="position">Armador</span>
-                </div>
-            </div>
-            <div class="team-card reveal">
-                <div class="team-card-image">
-                    <i class="fas fa-user"></i>
-                    <div class="team-card-number">5</div>
-                </div>
-                <div class="team-card-info">
-                    <h4>Jugador 5</h4>
-                    <span class="position">Opuesto</span>
-                </div>
-            </div>
-            <div class="team-card reveal">
-                <div class="team-card-image">
-                    <i class="fas fa-user"></i>
-                    <div class="team-card-number">6</div>
-                </div>
-                <div class="team-card-info">
-                    <h4>Jugador 6</h4>
-                    <span class="position">Central</span>
-                </div>
-            </div>
-            <div class="team-card reveal">
-                <div class="team-card-image">
-                    <i class="fas fa-user"></i>
-                    <div class="team-card-number">7</div>
-                </div>
-                <div class="team-card-info">
-                    <h4>Jugador 7</h4>
-                    <span class="position">Puntero</span>
-                </div>
-            </div>
-            <div class="team-card reveal">
-                <div class="team-card-image">
-                    <i class="fas fa-user"></i>
-                    <div class="team-card-number">8</div>
-                </div>
-                <div class="team-card-info">
-                    <h4>Jugador 8</h4>
-                    <span class="position">Armador</span>
-                </div>
-            </div>
+
         </div>
     </section>
 
@@ -1431,6 +1531,7 @@
                 <h5>Club</h5>
                 <ul>
                     <li><a href="#contact">Contacto</a></li>
+                    <li><a href="crm.html">Área privada</a></li>
                     <li><a href="#sponsors">Patrocinadores</a></li>
                     <li><a href="#">Normativa</a></li>
                     <li><a href="#">Inscripciones</a></li>
@@ -1590,6 +1691,19 @@
                     const offset = 80;
                     const top = target.getBoundingClientRect().top + window.scrollY - offset;
                     window.scrollTo({ top, behavior: 'smooth' });
+                }
+            });
+        });
+
+        // ===== TEAM CARDS TOGGLE =====
+        document.querySelectorAll('.team-card').forEach(card => {
+            card.addEventListener('click', function() {
+                this.classList.toggle('active');
+                const toggle = this.querySelector('.team-card-toggle');
+                if (this.classList.contains('active')) {
+                    toggle.innerHTML = 'Ocultar plantilla <i class="fas fa-chevron-up"></i>';
+                } else {
+                    toggle.innerHTML = 'Ver plantilla <i class="fas fa-chevron-down"></i>';
                 }
             });
         });

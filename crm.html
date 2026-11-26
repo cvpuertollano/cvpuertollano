@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Acceso privado al CRM del Club Voleibol Puertollano.">
+    <title>CRM | Club Voleibol Puertollano</title>
+    <link rel="icon" type="image/jpeg" href="CVP_LOGO.jpeg">
+    <link rel="stylesheet" href="crm.css">
+    <script type="module" src="crm.js"></script>
+</head>
+<body>
+    <header class="topbar">
+        <a class="brand" href="index.html">
+            <img src="CVP_LOGO.jpeg" alt="Club Voleibol Puertollano">
+            <span>Área privada <small>Club Voleibol Puertollano</small></span>
+        </a>
+        <div class="account-actions">
+            <a class="back-link" href="index.html">Volver a la web</a>
+            <span id="accountLabel" class="account-label" hidden></span>
+            <button id="signOutButton" class="button button-quiet" type="button" hidden>Cerrar sesión</button>
+        </div>
+    </header>
+
+    <main class="page-shell">
+        <section id="authPanel" class="auth-card">
+            <p class="eyebrow">Acceso seguro</p>
+            <h1>Iniciar sesión</h1>
+            <p class="muted">Introduce la cuenta que te ha facilitado el club.</p>
+            <form id="loginForm" class="form-stack">
+                <label for="email">Correo electrónico</label>
+                <input id="email" name="email" type="email" autocomplete="username" required>
+                <label for="password">Contraseña</label>
+                <input id="password" name="password" type="password" autocomplete="current-password" required>
+                <button id="loginButton" class="button button-primary" type="submit">Entrar</button>
+            </form>
+            <p id="loginMessage" class="form-message" role="status" aria-live="polite"></p>
+            <p class="privacy-note">Los datos del CRM son privados. No se registran pagos en línea ni datos de tarjetas o cuentas bancarias.</p>
+        </section>
+
+        <section id="accessDenied" class="auth-card" hidden>
+            <p class="eyebrow">Acceso restringido</p>
+            <h1>Portal del club</h1>
+            <p id="accessDeniedMessage" class="muted">Esta cuenta no tiene acceso al panel administrativo.</p>
+        </section>
+
+        <section id="familyPanel" hidden>
+            <div class="page-heading">
+                <div>
+                    <p class="eyebrow">Consulta familiar</p>
+                    <h1 id="familyHeading">Información de tu familia</h1>
+                    <p class="muted">Consulta las fichas y los movimientos vinculados a tu cuenta.</p>
+                </div>
+                <div id="familyMessage" class="app-message" role="status" aria-live="polite"></div>
+            </div>
+            <div id="familyPlayers" class="family-grid"></div>
+        </section>
+
+        <section id="adminPanel" hidden>
+            <div class="page-heading">
+                <div>
+                    <p class="eyebrow">Gestión del club</p>
+                    <h1>Panel administrativo</h1>
+                    <p class="muted">Gestiona fichas, equipos, temporadas, cuotas y pagos manuales.</p>
+                </div>
+                <div id="appMessage" class="app-message" role="status" aria-live="polite"></div>
+            </div>
+
+            <nav class="tabs" aria-label="Secciones del CRM">
+                <button class="tab-button active" type="button" data-panel="playersPanel">Jugadores</button>
+                <button class="tab-button" type="button" data-panel="guardiansPanel">Tutores</button>
+                <button class="tab-button" type="button" data-panel="teamsPanel">Equipos</button>
+                <button class="tab-button" type="button" data-panel="seasonsPanel">Temporadas</button>
+                <button class="tab-button" type="button" data-panel="enrollmentsPanel">Asignaciones</button>
+                <button class="tab-button" type="button" data-panel="feesPanel">Cuotas</button>
+                <button class="tab-button" type="button" data-panel="paymentsPanel">Pagos</button>
+            </nav>
+
+            <section id="playersPanel" class="workspace">
+                <div class="section-heading"><div><h2>Jugadores</h2><p>Las bajas son lógicas y conservan el historial.</p></div></div>
+                <form id="playerForm" class="editor-card">
+                    <input id="playerId" name="id" type="hidden">
+                    <h3 id="playerFormTitle">Añadir jugador</h3>
+                    <div class="form-grid">
+                        <div><label for="playerFirstName">Nombre</label><input id="playerFirstName" name="first_name" maxlength="100" required></div>
+                        <div><label for="playerLastName">Apellidos</label><input id="playerLastName" name="last_name" maxlength="150" required></div>
+                        <div class="wide"><label for="playerGuardians">Tutores vinculados</label><select id="playerGuardians" name="guardian_ids" multiple size="4"></select><small>Usa Ctrl (Windows) o Cmd (Mac) para seleccionar varios.</small></div>
+                    </div>
+                    <div class="form-actions"><button class="button button-primary" type="submit">Guardar jugador</button><button id="cancelPlayerEdit" class="button button-quiet" type="button" hidden>Cancelar edición</button><span id="playerMessage" class="form-message" role="status"></span></div>
+                </form>
+                <div class="table-card"><div class="table-scroll"><table><thead><tr><th>Jugador</th><th>Tutores</th><th>Estado</th><th>Acciones</th></tr></thead><tbody id="playersTable"></tbody></table></div></div>
+            </section>
+
+            <section id="guardiansPanel" class="workspace" hidden>
+                <div class="section-heading"><div><h2>Tutores y cuentas familiares</h2><p>Invita las cuentas desde Supabase Auth antes de vincularlas aquí.</p></div></div>
+                <form id="guardianForm" class="editor-card">
+                    <input id="guardianId" name="id" type="hidden">
+                    <h3 id="guardianFormTitle">Añadir tutor</h3>
+                    <div class="form-grid">
+                        <div class="wide"><label for="guardianUserId">Cuenta familiar</label><select id="guardianUserId" name="user_id" required></select><small>Se muestran los UUID de las cuentas con rol familiar aún no vinculadas.</small></div>
+                        <div><label for="guardianName">Nombre completo</label><input id="guardianName" name="full_name" maxlength="160" required></div>
+                        <div><label for="guardianPhone">Teléfono (opcional)</label><input id="guardianPhone" name="phone" type="tel" maxlength="40"></div>
+                    </div>
+                    <div class="form-actions"><button class="button button-primary" type="submit">Guardar tutor</button><button id="cancelGuardianEdit" class="button button-quiet" type="button" hidden>Cancelar edición</button><span id="guardianMessage" class="form-message" role="status"></span></div>
+                </form>
+                <div class="table-card"><div class="table-scroll"><table><thead><tr><th>Tutor</th><th>Cuenta</th><th>Teléfono</th><th>Estado</th><th>Acciones</th></tr></thead><tbody id="guardiansTable"></tbody></table></div></div>
+            </section>
+
+            <section id="teamsPanel" class="workspace" hidden>
+                <div class="section-heading"><div><h2>Equipos</h2><p>Los equipos archivados se conservan para consultar temporadas anteriores.</p></div></div>
+                <form id="teamForm" class="editor-card compact-editor">
+                    <input id="teamId" name="id" type="hidden">
+                    <h3 id="teamFormTitle">Añadir equipo</h3>
+                    <div class="form-grid"><div class="wide"><label for="teamName">Nombre del equipo</label><input id="teamName" name="name" maxlength="100" required></div></div>
+                    <div class="form-actions"><button class="button button-primary" type="submit">Guardar equipo</button><button id="cancelTeamEdit" class="button button-quiet" type="button" hidden>Cancelar edición</button><span id="teamMessage" class="form-message" role="status"></span></div>
+                </form>
+                <div class="table-card"><div class="table-scroll"><table><thead><tr><th>Equipo</th><th>Estado</th><th>Acciones</th></tr></thead><tbody id="teamsTable"></tbody></table></div></div>
+            </section>
+
+            <section id="seasonsPanel" class="workspace" hidden>
+                <div class="section-heading"><div><h2>Temporadas</h2><p>Las fechas de inicio y fin son opcionales.</p></div></div>
+                <form id="seasonForm" class="editor-card">
+                    <input id="seasonId" name="id" type="hidden">
+                    <h3 id="seasonFormTitle">Añadir temporada</h3>
+                    <div class="form-grid">
+                        <div class="wide"><label for="seasonName">Nombre</label><input id="seasonName" name="name" maxlength="100" placeholder="2026-2027" required></div>
+                        <div><label for="seasonStart">Fecha de inicio</label><input id="seasonStart" name="starts_on" type="date"></div>
+                        <div><label for="seasonEnd">Fecha de fin</label><input id="seasonEnd" name="ends_on" type="date"></div>
+                    </div>
+                    <div class="form-actions"><button class="button button-primary" type="submit">Guardar temporada</button><button id="cancelSeasonEdit" class="button button-quiet" type="button" hidden>Cancelar edición</button><span id="seasonMessage" class="form-message" role="status"></span></div>
+                </form>
+                <div class="table-card"><div class="table-scroll"><table><thead><tr><th>Temporada</th><th>Inicio</th><th>Fin</th><th>Estado</th><th>Acciones</th></tr></thead><tbody id="seasonsTable"></tbody></table></div></div>
+            </section>
+
+            <section id="enrollmentsPanel" class="workspace" hidden>
+                <div class="section-heading"><div><h2>Asignaciones</h2><p>Vincula jugadores con un equipo y temporada.</p></div></div>
+                <form id="enrollmentForm" class="editor-card">
+                    <div class="form-grid">
+                        <div><label for="enrollmentPlayer">Jugador</label><select id="enrollmentPlayer" name="player_id" required></select></div>
+                        <div><label for="enrollmentTeam">Equipo</label><select id="enrollmentTeam" name="team_id" required></select></div>
+                        <div><label for="enrollmentSeason">Temporada</label><select id="enrollmentSeason" name="season_id" required></select></div>
+                    </div>
+                    <div class="form-actions"><button class="button button-primary" type="submit">Crear asignación</button><span id="enrollmentMessage" class="form-message" role="status"></span></div>
+                </form>
+                <div class="table-card"><div class="table-scroll"><table><thead><tr><th>Jugador</th><th>Equipo</th><th>Temporada</th><th>Estado</th><th>Acciones</th></tr></thead><tbody id="enrollmentsTable"></tbody></table></div></div>
+            </section>
+
+            <section id="feesPanel" class="workspace" hidden>
+                <div class="section-heading"><div><h2>Cuotas y saldos</h2><p>Introduce importes en euros; se guardan en céntimos para evitar errores de redondeo.</p></div></div>
+                <form id="feeForm" class="editor-card">
+                    <input id="feeId" name="id" type="hidden">
+                    <h3 id="feeFormTitle">Añadir cuota</h3>
+                    <div class="form-grid">
+                        <div><label for="feePlayer">Jugador</label><select id="feePlayer" name="player_id" required></select></div>
+                        <div><label for="feeSeason">Temporada</label><select id="feeSeason" name="season_id" required></select></div>
+                        <div><label for="feeDescription">Concepto</label><input id="feeDescription" name="description" maxlength="160" placeholder="Cuota mensual" required></div>
+                        <div><label for="feeAmount">Importe (€)</label><input id="feeAmount" name="amount" type="number" min="0.01" step="0.01" inputmode="decimal" required></div>
+                        <div><label for="feeDueDate">Fecha de vencimiento (opcional)</label><input id="feeDueDate" name="due_date" type="date"></div>
+                    </div>
+                    <div class="form-actions"><button class="button button-primary" type="submit">Guardar cuota</button><button id="cancelFeeEdit" class="button button-quiet" type="button" hidden>Cancelar edición</button><span id="feeMessage" class="form-message" role="status"></span></div>
+                </form>
+                <div class="table-card"><div class="table-scroll"><table><thead><tr><th>Jugador</th><th>Concepto</th><th>Temporada</th><th>Cuota</th><th>Pagado</th><th>Pendiente</th><th>Vencimiento</th><th>Estado</th><th>Acciones</th></tr></thead><tbody id="feesTable"></tbody></table></div></div>
+            </section>
+
+            <section id="paymentsPanel" class="workspace" hidden>
+                <div class="section-heading"><div><h2>Pagos recibidos</h2><p>Registra transferencias, efectivo u otros pagos recibidos fuera de la web.</p></div></div>
+                <form id="paymentForm" class="editor-card">
+                    <div class="form-grid">
+                        <div class="wide"><label for="paymentFee">Cuota pendiente</label><select id="paymentFee" name="fee_id" required></select><small id="paymentBalance" class="muted"></small></div>
+                        <div><label for="paymentAmount">Importe recibido (€)</label><input id="paymentAmount" name="amount" type="number" min="0.01" step="0.01" inputmode="decimal" required></div>
+                        <div><label for="paymentDate">Fecha del pago</label><input id="paymentDate" name="paid_at" type="date" required></div>
+                        <div><label for="paymentMethod">Método</label><select id="paymentMethod" name="method" required><option value="cash">Efectivo</option><option value="bank_transfer">Transferencia</option><option value="other">Otro</option></select></div>
+                        <div><label for="paymentReference">Referencia opcional</label><input id="paymentReference" name="reference" maxlength="120" placeholder="No incluir datos de cuenta o tarjeta"></div>
+                    </div>
+                    <div class="form-actions"><button class="button button-primary" type="submit">Registrar pago</button><span id="paymentMessage" class="form-message" role="status"></span></div>
+                </form>
+                <div class="table-card"><div class="table-scroll"><table><thead><tr><th>Fecha</th><th>Jugador</th><th>Concepto</th><th>Importe</th><th>Método</th><th>Referencia</th></tr></thead><tbody id="paymentsTable"></tbody></table></div></div>
+            </section>
+        </section>
+    </main>
+    <footer class="footer"><p>Club Voleibol Puertollano · Área privada</p></footer>
+</body>
+</html>
