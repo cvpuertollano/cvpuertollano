@@ -659,6 +659,156 @@ function loadSpreadsheetLibrary() {
     return spreadsheetLibraryPromise;
 }
 
+function normalizeTableText(value) {
+    return String(value || '')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLocaleLowerCase('es')
+        .trim();
+}
+
+function tableCellText(cell) {
+    const textContent = cell.cloneNode(true);
+    textContent.querySelectorAll('select, input, textarea').forEach(control => control.remove());
+    const controlValues = Array.from(cell.querySelectorAll('select, input, textarea')).map(control => {
+        if (control.tagName === 'SELECT') return control.selectedOptions[0]?.textContent || '';
+        return control.value;
+    });
+    return [textContent.textContent, ...controlValues].join(' ');
+}
+
+function applyTableFilters(table) {
+    const body = table.tBodies[0];
+    if (!body) return;
+    const rows = Array.from(body.rows).filter(row => !row.classList.contains('empty-row'));
+    const filters = table._columnFilters || [];
+    let visibleCount = 0;
+
+    rows.forEach(row => {
+        const matches = filters.every((input, index) => {
+            const filter = normalizeTableText(input?.value);
+            return !filter || normalizeTableText(tableCellText(row.cells[index] || document.createElement('td'))).includes(filter);
+        });
+        row.hidden = !matches;
+        if (matches) visibleCount += 1;
+    });
+
+    const count = table._tableResultCount;
+    if (count) count.textContent = `${visibleCount} de ${rows.length} registros`;
+}
+
+async function exportTableToExcel(table, sectionName, tableIndex, button) {
+    const originalText = button.textContent;
+    button.disabled = true;
+    button.textContent = 'Preparando…';
+    try {
+        const XLSX = await loadSpreadsheetLibrary();
+        const headers = Array.from(table.tHead.rows[0].cells)
+            .filter(header => normalizeTableText(header.textContent) !== 'acciones')
+            .map(header => header.textContent.trim());
+        const dataRows = Array.from(table.tBodies[0]?.rows || [])
+            .filter(row => !row.hidden && !row.classList.contains('empty-row'));
+        if (!dataRows.length) {
+            setMessage(elements.appMessage, 'No hay registros visibles para exportar.', 'error');
+            return;
+        }
+
+        const actionColumnIndex = Array.from(table.tHead.rows[0].cells)
+            .findIndex(header => normalizeTableText(header.textContent) === 'acciones');
+        const rows = dataRows.map(row => Array.from(row.cells)
+            .filter((cell, index) => index !== actionColumnIndex)
+            .map(tableCellText));
+        const worksheet = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+        if (worksheet['!ref']) worksheet['!autofilter'] = { ref: worksheet['!ref'] };
+        worksheet['!cols'] = headers.map((header, index) => ({
+            wch: Math.min(42, Math.max(12, header.length, ...rows.map(row => String(row[index] || '').length)))
+        }));
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, worksheet, sectionName.slice(0, 31) || 'Datos');
+        const safeName = sectionName.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+            .toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'datos';
+        const suffix = tableIndex > 1 ? `-${tableIndex}` : '';
+        XLSX.writeFile(workbook, `${safeName}${suffix}-${localDateValue()}.xlsx`);
+        setMessage(elements.appMessage, `Excel descargado: ${dataRows.length} registros.`, 'success');
+    } catch (error) {
+        setMessage(elements.appMessage, error.message || 'No se pudo generar el archivo Excel.', 'error');
+    } finally {
+        button.disabled = false;
+        button.textContent = originalText;
+    }
+}
+
+function setupTableTools() {
+    document.querySelectorAll('#adminPanel .table-card table').forEach(table => {
+        if (table.dataset.toolsReady) return;
+        const headerRow = table.tHead?.rows[0];
+        const body = table.tBodies[0];
+        if (!headerRow || !body) return;
+
+        const headers = Array.from(headerRow.cells);
+        const filterRow = document.createElement('tr');
+        filterRow.className = 'table-filter-row';
+        table._columnFilters = headers.map(header => {
+            const filterCell = document.createElement('th');
+            const isActionColumn = normalizeTableText(header.textContent) === 'acciones';
+            if (!isActionColumn) {
+                const input = document.createElement('input');
+                input.type = 'search';
+                input.className = 'table-column-filter';
+                input.placeholder = 'Filtrar';
+                input.setAttribute('aria-label', `Filtrar por ${header.textContent.trim()}`);
+                input.addEventListener('input', () => applyTableFilters(table));
+                filterCell.append(input);
+                filterRow.append(filterCell);
+                return input;
+            }
+            filterCell.setAttribute('aria-hidden', 'true');
+            filterRow.append(filterCell);
+            return null;
+        });
+        table.tHead.append(filterRow);
+
+        const toolbar = document.createElement('div');
+        toolbar.className = 'table-tools';
+        const resultCount = document.createElement('span');
+        resultCount.className = 'table-result-count';
+        resultCount.setAttribute('aria-live', 'polite');
+        table._tableResultCount = resultCount;
+
+        const actions = document.createElement('div');
+        actions.className = 'table-tools-actions';
+        const clearButton = document.createElement('button');
+        clearButton.type = 'button';
+        clearButton.className = 'button button-quiet button-small';
+        clearButton.textContent = 'Limpiar filtros';
+        clearButton.addEventListener('click', () => {
+            table._columnFilters.forEach(input => { if (input) input.value = ''; });
+            applyTableFilters(table);
+        });
+        const exportButton = document.createElement('button');
+        exportButton.type = 'button';
+        exportButton.className = 'button button-primary button-small';
+        exportButton.textContent = 'Descargar Excel';
+        const section = table.closest('.workspace');
+        const sectionName = section?.querySelector('.section-heading h2')?.textContent.trim() || 'Datos';
+        const tableIndex = Array.from(section?.querySelectorAll('.table-card table') || []).indexOf(table) + 1;
+        exportButton.addEventListener('click', () => exportTableToExcel(table, sectionName, tableIndex, exportButton));
+        actions.append(clearButton, exportButton);
+        toolbar.append(resultCount, actions);
+        table.closest('.table-card').prepend(toolbar);
+
+        table.addEventListener('input', () => applyTableFilters(table));
+        table.addEventListener('change', () => applyTableFilters(table));
+        new MutationObserver(() => applyTableFilters(table)).observe(body, {
+            childList: true,
+            subtree: true,
+            characterData: true
+        });
+        table.dataset.toolsReady = 'true';
+        applyTableFilters(table);
+    });
+}
+
 async function readWorkbookFile(file, XLSX) {
     if (!/\.(xlsx|xls)$/i.test(file.name)) throw new Error(`“${file.name}” no parece un archivo Excel compatible.`);
     if (!file.size || file.size > MAX_WORKBOOK_BYTES) throw new Error('Cada libro debe ocupar entre 1 byte y 15 MB.');
@@ -1183,6 +1333,7 @@ function setupCancelButtons() {
 }
 
 async function initialize() {
+    setupTableTools();
     setupTabs();
     setupCancelButtons();
     registerAdminForms();
