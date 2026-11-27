@@ -25,8 +25,8 @@
     <main class="page-shell">
         <section id="authPanel" class="auth-card">
             <p class="eyebrow">Acceso seguro</p>
-            <h1>Iniciar sesión</h1>
-            <p class="muted">Introduce la cuenta que te ha facilitado el club.</p>
+            <h1 id="authHeading">Iniciar sesión</h1>
+            <p id="authIntro" class="muted">Introduce la cuenta que te ha facilitado el club.</p>
             <form id="loginForm" class="form-stack">
                 <label for="email">Correo electrónico</label>
                 <input id="email" name="email" type="email" autocomplete="username" required>
@@ -35,6 +35,15 @@
                 <button id="loginButton" class="button button-primary" type="submit">Entrar</button>
             </form>
             <p id="loginMessage" class="form-message" role="status" aria-live="polite"></p>
+            <form id="passwordSetupForm" class="form-stack" hidden>
+                <label for="newPassword">Nueva contraseña</label>
+                <input id="newPassword" name="new_password" type="password" autocomplete="new-password" minlength="8" required>
+                <small>Debe tener al menos 8 caracteres.</small>
+                <label for="confirmPassword">Repite la contraseña</label>
+                <input id="confirmPassword" name="confirm_password" type="password" autocomplete="new-password" minlength="8" required>
+                <button id="passwordSetupButton" class="button button-primary" type="submit">Guardar contraseña</button>
+            </form>
+            <p id="passwordSetupMessage" class="form-message" role="status" aria-live="polite"></p>
             <p class="privacy-note">Los datos del CRM son privados. No se registran pagos en línea ni datos de tarjetas o cuentas bancarias.</p>
         </section>
 

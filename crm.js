@@ -11,9 +11,13 @@ import {
 
 const SUPABASE_URL = 'https://tpqpugpqzuelwmqgzrpp.supabase.co';
 const SUPABASE_PUBLIC_KEY = 'sb_publishable_nVk9_qcPpWn4im1MLKWuZw_cf7klUZy';
+const authCallbackType = new URLSearchParams(window.location.hash.slice(1)).get('type')
+    || new URLSearchParams(window.location.search).get('type');
 
 const elements = {
     authPanel: document.getElementById('authPanel'),
+    authHeading: document.getElementById('authHeading'),
+    authIntro: document.getElementById('authIntro'),
     accessDenied: document.getElementById('accessDenied'),
     accessDeniedMessage: document.getElementById('accessDeniedMessage'),
     familyPanel: document.getElementById('familyPanel'),
@@ -26,6 +30,9 @@ const elements = {
     loginForm: document.getElementById('loginForm'),
     loginButton: document.getElementById('loginButton'),
     loginMessage: document.getElementById('loginMessage'),
+    passwordSetupForm: document.getElementById('passwordSetupForm'),
+    passwordSetupButton: document.getElementById('passwordSetupButton'),
+    passwordSetupMessage: document.getElementById('passwordSetupMessage'),
     appMessage: document.getElementById('appMessage')
 };
 
@@ -47,6 +54,7 @@ const state = {
 let supabase;
 let workbookImportDraft = null;
 let spreadsheetLibraryPromise = null;
+let passwordSetupRequired = ['invite', 'recovery'].includes(authCallbackType);
 
 function setMessage(element, message, kind = '') {
     element.textContent = message;
@@ -1231,12 +1239,34 @@ function showLogin(message = '') {
     clearAdminState();
     clearFamilyState();
     elements.authPanel.hidden = false;
+    elements.authHeading.textContent = 'Iniciar sesión';
+    elements.authIntro.textContent = 'Introduce la cuenta que te ha facilitado el club.';
+    elements.loginForm.hidden = false;
+    elements.passwordSetupForm.hidden = true;
+    setMessage(elements.passwordSetupMessage, '');
+    setMessage(elements.loginMessage, message, message ? 'error' : '');
     elements.accessDenied.hidden = true;
     elements.familyPanel.hidden = true;
     elements.adminPanel.hidden = true;
     elements.accountLabel.hidden = true;
     elements.signOutButton.hidden = true;
-    if (message) setMessage(elements.loginMessage, message, 'error');
+}
+
+function showPasswordSetup(message = '') {
+    clearAdminState();
+    clearFamilyState();
+    elements.authPanel.hidden = false;
+    elements.authHeading.textContent = 'Crea tu contraseña';
+    elements.authIntro.textContent = 'El enlace se ha validado. Elige una contraseña para acceder al portal familiar.';
+    elements.loginForm.hidden = true;
+    elements.passwordSetupForm.hidden = false;
+    setMessage(elements.loginMessage, '');
+    setMessage(elements.passwordSetupMessage, message, message ? 'error' : '');
+    elements.accessDenied.hidden = true;
+    elements.familyPanel.hidden = true;
+    elements.adminPanel.hidden = true;
+    elements.accountLabel.hidden = true;
+    elements.signOutButton.hidden = true;
 }
 
 function showDenied(message) {
@@ -1349,19 +1379,36 @@ async function initialize() {
 
     supabase = createClient(SUPABASE_URL, SUPABASE_PUBLIC_KEY);
     supabase.auth.onAuthStateChange((event, session) => {
-        if (event === 'SIGNED_OUT') showLogin();
-        if (event === 'SIGNED_IN' && session?.user) window.setTimeout(() => openAccount(session.user), 0);
+        if (event === 'SIGNED_OUT') {
+            passwordSetupRequired = false;
+            showLogin();
+        }
+        if (event === 'PASSWORD_RECOVERY' && session?.user) {
+            passwordSetupRequired = true;
+            window.setTimeout(() => showPasswordSetup(), 0);
+        }
+        if (event === 'SIGNED_IN' && session?.user) {
+            window.setTimeout(() => {
+                if (passwordSetupRequired) showPasswordSetup();
+                else openAccount(session.user);
+            }, 0);
+        }
     });
 
     const { data, error } = await supabase.auth.getSession();
     if (error) {
         showLogin('No se pudo comprobar la sesión. Inténtalo de nuevo.');
     } else if (data.session?.user) {
-        await openAccount(data.session.user);
+        if (passwordSetupRequired) showPasswordSetup();
+        else await openAccount(data.session.user);
+    } else if (passwordSetupRequired) {
+        passwordSetupRequired = false;
+        showLogin('No se pudo validar la invitación. Pide al club que te envíe una nueva e inténtalo con el enlace más reciente.');
     }
 
     elements.loginForm.addEventListener('submit', async event => {
         event.preventDefault();
+        passwordSetupRequired = false;
         elements.loginButton.disabled = true;
         setMessage(elements.loginMessage, 'Comprobando acceso…');
         const formData = new FormData(elements.loginForm);
@@ -1375,6 +1422,37 @@ async function initialize() {
             setMessage(elements.loginMessage, 'No se pudo conectar con el servicio de autenticación.', 'error');
         } finally {
             elements.loginButton.disabled = false;
+        }
+    });
+
+    elements.passwordSetupForm.addEventListener('submit', async event => {
+        event.preventDefault();
+        const password = document.getElementById('newPassword').value;
+        const confirmation = document.getElementById('confirmPassword').value;
+        if (password.length < 8) {
+            setMessage(elements.passwordSetupMessage, 'La contraseña debe tener al menos 8 caracteres.', 'error');
+            return;
+        }
+        if (password !== confirmation) {
+            setMessage(elements.passwordSetupMessage, 'Las contraseñas no coinciden.', 'error');
+            return;
+        }
+
+        elements.passwordSetupButton.disabled = true;
+        setMessage(elements.passwordSetupMessage, 'Guardando contraseña…');
+        try {
+            const { data, error: updateError } = await supabase.auth.updateUser({ password });
+            if (updateError) {
+                setMessage(elements.passwordSetupMessage, 'No se pudo guardar la contraseña. Comprueba que el enlace siga vigente o solicita una nueva invitación.', 'error');
+                return;
+            }
+            passwordSetupRequired = false;
+            elements.passwordSetupForm.reset();
+            if (data.user) await openAccount(data.user);
+        } catch (error) {
+            setMessage(elements.passwordSetupMessage, 'No se pudo conectar para guardar la contraseña.', 'error');
+        } finally {
+            elements.passwordSetupButton.disabled = false;
         }
     });
 
